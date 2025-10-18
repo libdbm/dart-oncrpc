@@ -2,6 +2,10 @@ import 'dart:typed_data';
 
 import '../xdr/xdr_io.dart';
 
+/// RPC message type as defined by RFC 5531.
+///
+/// - [MessageType.call] represents a client call message.
+/// - [MessageType.reply] represents a server reply message.
 enum MessageType {
   call(0),
   reply(1);
@@ -18,6 +22,9 @@ enum MessageType {
       );
 }
 
+/// Reply status for an RPC reply message.
+///
+/// Indicates whether a server reply was accepted or denied.
 enum ReplyStatus {
   accepted(0),
   denied(1);
@@ -34,6 +41,10 @@ enum ReplyStatus {
       );
 }
 
+/// Accept status indicating the outcome of a successfully received call.
+///
+/// Returned within an accepted reply body to specify whether the call
+/// succeeded or failed due to program/procedure issues.
 enum AcceptStatus {
   success(0),
   progUnavail(1),
@@ -54,6 +65,10 @@ enum AcceptStatus {
       );
 }
 
+/// Reject status indicating why a reply was denied at the RPC layer.
+///
+/// Used when the server could not process the call due to a protocol or
+/// authentication mismatch.
 enum RejectStatus {
   rpcMismatch(0),
   authError(1);
@@ -70,6 +85,9 @@ enum RejectStatus {
       );
 }
 
+/// Authentication status codes for AUTH flavors.
+///
+/// Returned by the server to indicate authentication/verification result.
 enum AuthStatus {
   ok(0),
   badcred(1),
@@ -91,6 +109,10 @@ enum AuthStatus {
       );
 }
 
+/// Represents a complete RPC message with header and body.
+///
+/// The message consists of an XID, a [MessageType], and a body that is either
+/// a [CallBody] or [ReplyBody] depending on the type.
 class RpcMessage {
   RpcMessage({
     required this.xid,
@@ -128,10 +150,17 @@ class RpcMessage {
   }
 }
 
+/// Base type for all RPC message bodies.
+///
+/// Implemented by [CallBody] for call messages and [ReplyBody] for replies.
 abstract class RpcMessageBody {
   void encode(final XdrOutputStream stream);
 }
 
+/// RPC call message body.
+///
+/// Contains program, version, procedure numbers, authentication credentials
+/// and optional raw parameters encoded using XDR.
 class CallBody extends RpcMessageBody {
   CallBody({
     this.rpcvers = 2,
@@ -190,6 +219,10 @@ class CallBody extends RpcMessageBody {
   }
 }
 
+/// RPC reply message body.
+///
+/// Includes the high-level [ReplyStatus] and the detailed reply data for
+/// accepted or rejected replies.
 class ReplyBody extends RpcMessageBody {
   ReplyBody({
     required this.replyStatus,
@@ -226,6 +259,10 @@ abstract class ReplyData {
   void encode(final XdrOutputStream stream);
 }
 
+/// Details for an accepted RPC reply.
+///
+/// Contains the server verifier, the [AcceptStatus], and optional status data
+/// such as version mismatch info or success payload metadata.
 class AcceptedReply extends ReplyData {
   AcceptedReply({
     required this.verf,
@@ -271,6 +308,10 @@ class AcceptedReply extends ReplyData {
   }
 }
 
+/// Details for a rejected RPC reply.
+///
+/// Contains the [RejectStatus] and optional data describing the reason for
+/// rejection (e.g., version mismatch or authentication failure).
 class RejectedReply extends ReplyData {
   RejectedReply({
     required this.rejectStatus,
@@ -306,10 +347,14 @@ class RejectedReply extends ReplyData {
   }
 }
 
+/// Base class for additional data accompanying an accepted reply.
 abstract class AcceptData {
   void encode(final XdrOutputStream stream);
 }
 
+/// Success result payload for an accepted reply.
+///
+/// Contains the raw XDR-encoded procedure result bytes if present.
 class SuccessData extends AcceptData {
   SuccessData(this.result);
   final Uint8List? result;
@@ -330,10 +375,14 @@ class SuccessData extends AcceptData {
   }
 }
 
+/// Base class for additional data accompanying a rejected reply.
 abstract class RejectData {
   void encode(final XdrOutputStream stream);
 }
 
+/// RPC authentication flavor identifiers.
+///
+/// Used inside [OpaqueAuth] to indicate the authentication mechanism.
 enum AuthFlavor {
   none(0),
   unix(1),
@@ -350,6 +399,10 @@ enum AuthFlavor {
       .firstWhere((e) => e.value == value, orElse: () => AuthFlavor.none);
 }
 
+/// Authentication verifier/credentials structure used in RPC headers.
+///
+/// Contains the [AuthFlavor] and an opaque byte body whose structure depends
+/// on the selected flavor.
 class OpaqueAuth {
   OpaqueAuth({required this.flavor, required this.body});
 
@@ -372,6 +425,10 @@ class OpaqueAuth {
   }
 }
 
+/// Version mismatch information for accepted/rejected replies.
+///
+/// Communicates the supported version range when the requested version is
+/// not supported.
 class MismatchInfo extends AcceptData implements RejectData {
   MismatchInfo({required this.low, required this.high});
   final int low;
@@ -392,6 +449,9 @@ class MismatchInfo extends AcceptData implements RejectData {
   }
 }
 
+/// Authentication error details for a rejected reply.
+///
+/// Wraps an [AuthStatus] code describing the specific authentication failure.
 class AuthError extends RejectData {
   AuthError({required this.status});
   final AuthStatus status;

@@ -1,13 +1,10 @@
 name: dart_oncrpc
 description: >-
   A complete ONC-RPC (Open Network Computing Remote Procedure Call) implementation for Dart.
-  Includes XDR serialization, RPC protocol, code generation from .x files, and full C compatibility.
-  Perfect for building NFS servers and other RPC-based services.
-version: 1.0.0
+version: 1.0.1
 homepage: https://github.com/libdbm/dart-oncrpc
 repository: https://github.com/libdbm/dart-oncrpc
 issue_tracker: https://github.com/libdbm/dart-oncrpc/issues
-documentation: https://pub.dev/documentation/dart-oncrpc/latest/
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

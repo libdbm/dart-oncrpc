@@ -11,3 +11,6 @@ Initial release of dart_oncrpc - A complete ONC-RPC implementation for Dart.
 - Echo server example with multiple procedures
 - NFS server example
 
+## 1.0.1
+
+General cleanup following the initial checkin.

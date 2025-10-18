@@ -85,6 +85,9 @@ const PMAP_PORT = 111;
 const IPPROTO_TCP = 6;
 const IPPROTO_UDP = 17;
 
+/// Portmap mapping entry describing a registered RPC service.
+///
+/// Contains the program number, version, protocol, and port.
 class Mapping extends XdrType {
   Mapping({
     required this.prog,
@@ -116,6 +119,7 @@ class Mapping extends XdrType {
       );
 }
 
+/// Singly-linked list of [Mapping] entries returned by PMAPPROC_DUMP.
 class PmapList extends XdrType {
   PmapList({this.map, this.next});
 
@@ -173,6 +177,7 @@ class PmapList extends XdrType {
   }
 }
 
+/// Arguments for PMAPPROC_CALLIT indirect call.
 class CallArgs extends XdrType {
   CallArgs({
     required this.prog,
