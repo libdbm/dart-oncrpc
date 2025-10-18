@@ -1,0 +1,10 @@
+include: ../../analysis_options.yaml
+
+linter:
+  rules:
+    # NFS v3 protocol types use lowercase names as defined in RFC 1813
+    # (e.g., nfs_fh3, fattr3, diropargs3, nfsstat3, etc.)
+    camel_case_types: false
+
+    # Example code - relative imports are fine for internal structure
+    avoid_relative_lib_imports: false

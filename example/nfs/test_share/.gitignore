@@ -1,0 +1,12 @@
+# Git keeps this directory but ignores user-generated files
+# The example test files are tracked, but anything users create is ignored
+
+# Ignore everything except the example files
+*
+!.gitignore
+!welcome.txt
+!readme.txt
+!documents/
+!documents/plan.txt
+!photos/
+!photos/nfs.jpg

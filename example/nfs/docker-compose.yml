@@ -1,0 +1,24 @@
+services:
+  nfs-server:
+    build:
+      context: ../..
+      dockerfile: example/nfs/Dockerfile
+    image: dart-nfs-server:latest
+    container_name: dart-nfs-server
+    ports:
+      - "2049:2049"
+    volumes:
+      # Mount a local directory to serve via NFS
+      - ./export-content:/export:ro
+    environment:
+      - EXPORT_DIR=/export
+      - NFS_PORT=2049
+    # Uncomment to run with additional options
+    # command: ["--export", "/export", "--port", "2049", "--tcp", "--verbose"]
+    restart: unless-stopped
+    networks:
+      - nfs-network
+
+networks:
+  nfs-network:
+    driver: bridge

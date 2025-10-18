@@ -1,0 +1,25 @@
+# Dart build artifacts
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Generated files
+lib/nfs.dart
+lib/nfs_types.dart
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test/
+
+# Documentation
+*.md
+!README.md
