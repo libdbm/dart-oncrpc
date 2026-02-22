@@ -228,7 +228,11 @@ class TcpTransport extends RpcTransport {
 
   void _handleData(final Uint8List data) {
     _buffer.add(data);
-    _processBuffer();
+    try {
+      _processBuffer();
+    } catch (e) {
+      _messageController.addError(e);
+    }
   }
 
   void _processBuffer() {
@@ -323,6 +327,7 @@ class UdpTransport extends RpcTransport {
   /// The UDP port number to send datagrams to.
   final int port;
   RawDatagramSocket? _socket;
+  InternetAddress? _targetAddress;
   final _messageController = StreamController<RpcMessage>.broadcast();
 
   @override
@@ -338,9 +343,20 @@ class UdpTransport extends RpcTransport {
     }
 
     try {
-      _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      final addresses = await InternetAddress.lookup(host);
+      if (addresses.isEmpty) {
+        throw RpcTransportError('Failed to resolve host: $host');
+      }
+      _targetAddress = addresses.first;
+
+      final bindAddress = _targetAddress!.type == InternetAddressType.IPv6
+          ? InternetAddress.anyIPv6
+          : InternetAddress.anyIPv4;
+      _socket = await RawDatagramSocket.bind(bindAddress, 0);
       _socket!.listen(_handleDatagram);
     } catch (e) {
+      _targetAddress = null;
+      if (e is RpcError) rethrow;
       throw RpcTransportError('Failed to bind UDP socket', cause: e);
     }
   }
@@ -349,6 +365,7 @@ class UdpTransport extends RpcTransport {
   Future<void> close() async {
     _socket?.close();
     _socket = null;
+    _targetAddress = null;
     await _messageController.close();
   }
 
@@ -363,12 +380,10 @@ class UdpTransport extends RpcTransport {
       message.encode(stream);
       final data = stream.toBytes();
 
-      final addresses = await InternetAddress.lookup(host);
-      if (addresses.isEmpty) {
-        throw RpcTransportError('Failed to resolve host: $host');
+      final targetAddress = _targetAddress;
+      if (targetAddress == null) {
+        throw RpcConnectionError.notConnected();
       }
-
-      final targetAddress = addresses.first;
       final sent = _socket!.send(data, targetAddress, port);
       if (sent == 0) {
         throw RpcTransportError('Failed to send datagram');
@@ -381,8 +396,18 @@ class UdpTransport extends RpcTransport {
 
   void _handleDatagram(final RawSocketEvent event) {
     if (event == RawSocketEvent.read) {
-      final datagram = _socket!.receive();
+      final socket = _socket;
+      final expectedAddress = _targetAddress;
+      if (socket == null || expectedAddress == null) {
+        return;
+      }
+
+      final datagram = socket.receive();
       if (datagram != null) {
+        if (datagram.port != port ||
+            !_sameAddress(datagram.address, expectedAddress)) {
+          return;
+        }
         try {
           final stream = XdrInputStream(datagram.data);
           final message = RpcMessage.decode(stream);
@@ -392,5 +417,22 @@ class UdpTransport extends RpcTransport {
         }
       }
     }
+  }
+
+  bool _sameAddress(final InternetAddress a, final InternetAddress b) {
+    if (a.type != b.type) {
+      return false;
+    }
+    final left = a.rawAddress;
+    final right = b.rawAddress;
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var i = 0; i < left.length; i++) {
+      if (left[i] != right[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 }

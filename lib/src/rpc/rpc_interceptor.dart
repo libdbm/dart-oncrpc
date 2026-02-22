@@ -319,6 +319,7 @@ class MetricsInterceptor implements RpcInterceptor {
     final key = '${context.program}:${context.version}.${context.procedure}';
     _callCounts.update(key, (v) => v + 1, ifAbsent: () => 1);
     context.attributes['_startTime'] = DateTime.now().millisecondsSinceEpoch;
+    context.attributes['_procedureKey'] = key;
     return context;
   }
 

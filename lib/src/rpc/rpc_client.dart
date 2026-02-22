@@ -77,7 +77,11 @@ class RpcClient {
     RpcAuthentication? auth,
     this.timeout = const Duration(seconds: 30),
     this.maxRetries = 3,
-  }) : auth = auth ?? AuthNone();
+  }) : auth = auth ?? AuthNone() {
+    if (maxRetries < 0) {
+      throw ArgumentError.value(maxRetries, 'maxRetries', 'must be >= 0');
+    }
+  }
 
   /// The network transport used for RPC communication.
   final RpcTransport transport;
@@ -244,9 +248,9 @@ class RpcClient {
       callContext = await interceptor.onCall(callContext);
     }
 
-    int retries = 0;
+    int timedOutAttempts = 0;
 
-    while (retries < maxRetries) {
+    while (true) {
       try {
         final result = await _makeCall(
           callContext.program,
@@ -270,9 +274,9 @@ class RpcClient {
 
         return responseContext.result;
       } on TimeoutException {
-        retries++;
-        if (retries >= maxRetries) {
-          break;
+        timedOutAttempts++;
+        if (timedOutAttempts > maxRetries) {
+          throw RpcTimeoutError(timeout, retries: maxRetries);
         }
       } catch (e) {
         // Run response interceptors on error
@@ -297,8 +301,6 @@ class RpcClient {
         rethrow;
       }
     }
-
-    throw RpcTimeoutError(timeout, retries: maxRetries);
   }
 
   Future<Uint8List?> _makeCall(

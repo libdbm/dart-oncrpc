@@ -486,5 +486,48 @@ void main() {
         await server.stop();
       }
     });
+
+    test('Malformed arguments return GARBAGE_ARGS', () async {
+      final transport = TcpServerTransport(port: 9990);
+      final server = RpcServer(transports: [transport]);
+      final program = RpcProgram(TEST_PROG);
+      final version = RpcVersion(TEST_VERS)
+        ..addProcedure(ADD_PROC, (params, auth) async {
+          // Second read should fail with XdrEofException.
+          final a = params.readInt();
+          final b = params.readInt();
+          return (XdrOutputStream()..writeInt(a + b)).toBytes();
+        });
+
+      program.addVersion(version);
+      server.addProgram(program);
+      await server.listen();
+
+      final clientTransport = TcpTransport(host: 'localhost', port: 9990);
+      final client = RpcClient(transport: clientTransport);
+      await client.connect();
+
+      try {
+        final malformedParams = XdrOutputStream()..writeInt(7);
+        await expectLater(
+          client.call(
+            program: TEST_PROG,
+            version: TEST_VERS,
+            procedure: ADD_PROC,
+            params: malformedParams.toBytes(),
+          ),
+          throwsA(
+            isA<RpcServerError>().having(
+              (e) => e.type,
+              'type',
+              RpcServerErrorType.garbageArgs,
+            ),
+          ),
+        );
+      } finally {
+        await client.close();
+        await server.stop();
+      }
+    });
   });
 }

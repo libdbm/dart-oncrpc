@@ -384,6 +384,10 @@ abstract class RejectData {
 ///
 /// Used inside [OpaqueAuth] to indicate the authentication mechanism.
 enum AuthFlavor {
+  /// Unknown/unsupported flavor value received from the wire.
+  ///
+  /// This variant is only used while decoding incoming messages.
+  unknown(-1),
   none(0),
   unix(1),
   short(2),
@@ -395,8 +399,10 @@ enum AuthFlavor {
   // ignore: sort_constructors_first
   const AuthFlavor(this.value);
 
-  static AuthFlavor fromValue(final int value) => AuthFlavor.values
-      .firstWhere((e) => e.value == value, orElse: () => AuthFlavor.none);
+  static AuthFlavor fromValue(final int value) => AuthFlavor.values.firstWhere(
+        (e) => e.value == value,
+        orElse: () => AuthFlavor.unknown,
+      );
 }
 
 /// Authentication verifier/credentials structure used in RPC headers.

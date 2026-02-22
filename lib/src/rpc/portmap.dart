@@ -197,7 +197,6 @@ class CallArgs extends XdrType {
       ..writeInt(prog)
       ..writeInt(vers)
       ..writeInt(proc)
-      ..writeInt(args.length)
       ..writeOpaque(args);
   }
 
@@ -205,8 +204,7 @@ class CallArgs extends XdrType {
     final prog = stream.readInt();
     final vers = stream.readInt();
     final proc = stream.readInt();
-    final argsLen = stream.readInt();
-    final args = stream.readOpaque(argsLen);
+    final args = stream.readOpaque();
 
     return CallArgs(
       prog: prog,
@@ -230,15 +228,13 @@ class CallResult extends XdrType {
   void encode(final XdrOutputStream stream) {
     stream
       ..writeInt(port)
-      ..writeInt(res.length)
       ..writeOpaque(res);
   }
 
   // ignore: prefer_constructors_over_static_methods
   static CallResult decode(final XdrInputStream stream) {
     final port = stream.readInt();
-    final resLen = stream.readInt();
-    final res = stream.readBytes(resLen);
+    final res = stream.readOpaque();
 
     return CallResult(
       port: port,

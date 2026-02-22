@@ -122,7 +122,15 @@ class TcpServerTransport implements ServerTransport {
     client.listen(
       (final Uint8List data) {
         buffer.add(data);
-        final records = codec.decode(buffer);
+        List<Uint8List> records;
+        try {
+          records = codec.decode(buffer);
+        } catch (e, st) {
+          RpcLogger.error('Failed to decode TCP record marking', e, st);
+          responseQueue.close();
+          client.close();
+          return;
+        }
 
         for (final record in records) {
           final request = RpcRequest(

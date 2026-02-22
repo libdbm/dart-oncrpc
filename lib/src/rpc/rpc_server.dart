@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../xdr/xdr_exceptions.dart';
 import '../xdr/xdr_io.dart';
 import 'rpc_authentication.dart';
+import 'rpc_errors.dart';
 import 'rpc_interceptor.dart';
 import 'rpc_logger.dart';
 import 'rpc_message.dart';
@@ -169,9 +171,8 @@ class RpcVersion {
 class RpcServer {
   /// Creates an RPC server with the specified transports.
   ///
-  /// Each incoming request is processed synchronously to match ONC-RPC's
-  /// request/response semantics. If you need asynchronous fan-out, layer it
-  /// above this API.
+  /// Requests are processed asynchronously and may run concurrently.
+  /// Procedure handlers should therefore be written to be concurrency-safe.
   ///
   /// Parameters:
   /// - [transports]: Network transports to listen on.
@@ -434,6 +435,8 @@ class RpcServer {
     final OpaqueAuth verifier,
   ) {
     switch (credential.flavor) {
+      case AuthFlavor.unknown:
+        return _AuthResult.error(AuthStatus.badcred);
       case AuthFlavor.none:
         return _AuthResult.success(AuthContext(auth: AuthNone()));
       case AuthFlavor.unix:
@@ -634,14 +637,108 @@ class RpcServer {
         }
       }
 
-      final reply = _accepted(
-        xid,
-        AcceptStatus.systemErr,
+      final reply = _mapErrorToReply(
+        xid: xid,
         verifier: verifier,
+        error: error,
       );
       unawaited(request.respond(_encode(reply)));
     }
   }
+
+  RpcMessage _mapErrorToReply({
+    required final int xid,
+    required final OpaqueAuth verifier,
+    required final Object error,
+  }) {
+    if (error is RpcServerError) {
+      switch (error.type) {
+        case RpcServerErrorType.progUnavail:
+          return _accepted(
+            xid,
+            AcceptStatus.progUnavail,
+            verifier: verifier,
+          );
+        case RpcServerErrorType.progMismatch:
+          return _accepted(
+            xid,
+            AcceptStatus.progMismatch,
+            data: MismatchInfo(
+              low: error.low ?? 0,
+              high: error.high ?? 0,
+            ),
+            verifier: verifier,
+          );
+        case RpcServerErrorType.procUnavail:
+          return _accepted(
+            xid,
+            AcceptStatus.procUnavail,
+            verifier: verifier,
+          );
+        case RpcServerErrorType.garbageArgs:
+          return _accepted(
+            xid,
+            AcceptStatus.garbageArgs,
+            verifier: verifier,
+          );
+        case RpcServerErrorType.systemErr:
+          return _accepted(
+            xid,
+            AcceptStatus.systemErr,
+            verifier: verifier,
+          );
+        case RpcServerErrorType.rpcMismatch:
+          return _reply(
+            xid,
+            ReplyStatus.denied,
+            RejectedReply(
+              rejectStatus: RejectStatus.rpcMismatch,
+              data: MismatchInfo(
+                low: error.low ?? 2,
+                high: error.high ?? 2,
+              ),
+            ),
+          );
+      }
+    }
+
+    if (error is RpcAuthError) {
+      return _reply(
+        xid,
+        ReplyStatus.denied,
+        RejectedReply(
+          rejectStatus: RejectStatus.authError,
+          data: AuthError(status: _mapAuthErrorType(error.type)),
+        ),
+      );
+    }
+
+    if (error is XdrException ||
+        error is FormatException ||
+        error is RangeError) {
+      return _accepted(
+        xid,
+        AcceptStatus.garbageArgs,
+        verifier: verifier,
+      );
+    }
+
+    return _accepted(
+      xid,
+      AcceptStatus.systemErr,
+      verifier: verifier,
+    );
+  }
+
+  AuthStatus _mapAuthErrorType(final RpcAuthErrorType type) => switch (type) {
+        RpcAuthErrorType.badcred => AuthStatus.badcred,
+        RpcAuthErrorType.rejectedcred => AuthStatus.rejectedcred,
+        RpcAuthErrorType.badverf => AuthStatus.badverf,
+        RpcAuthErrorType.rejectedverf => AuthStatus.rejectedverf,
+        RpcAuthErrorType.tooweak => AuthStatus.tooweak,
+        RpcAuthErrorType.invalidresp => AuthStatus.invalidresp,
+        RpcAuthErrorType.failed => AuthStatus.failed,
+      };
 
   /// Execute handler with middleware chain
   Future<RpcResponseContext> _executeWithMiddleware(

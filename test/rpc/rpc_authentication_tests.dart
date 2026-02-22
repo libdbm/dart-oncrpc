@@ -21,6 +21,15 @@ void main() {
       expect(verifier.flavor, AuthFlavor.none);
       expect(auth.validate(credential, verifier), isTrue);
     });
+
+    test('decodes unknown auth flavor without downgrading to AUTH_NONE', () {
+      final stream = XdrOutputStream()
+        ..writeInt(999)
+        ..writeOpaque(Uint8List(0));
+
+      final decoded = OpaqueAuth.decode(XdrInputStream(stream.toBytes()));
+      expect(decoded.flavor, equals(AuthFlavor.unknown));
+    });
   });
 
   group('AuthUnix', () {
@@ -103,6 +112,16 @@ void main() {
       );
       expect(auth.verify(tamperedResponse), isFalse);
     });
+
+    test('rejects credentials for unexpected hostname', () {
+      final key = _key(32);
+      final client = AuthDes(hostname: 'client-a', secretKey: key, window: 600);
+      final credential = client.credential();
+      final verifier = client.verifier();
+
+      final server = AuthDes(hostname: 'client-b', secretKey: key, window: 600);
+      expect(server.validate(credential, verifier), isFalse);
+    });
   });
 
   group('AuthGss', () {
@@ -173,6 +192,31 @@ void main() {
         sessionKey: key,
       );
       expect(freshClient.verify(tamperedResponse), isFalse);
+    });
+
+    test('rejects credentials for unexpected service or principal', () {
+      final key = _key(32);
+      final client = AuthGss(
+        principal: 'user@REALM',
+        service: 'nfs',
+        sessionKey: key,
+      );
+      final credential = client.credential();
+      final verifier = client.verifier();
+
+      final wrongServiceServer = AuthGss(
+        principal: 'user@REALM',
+        service: 'mountd',
+        sessionKey: key,
+      );
+      expect(wrongServiceServer.validate(credential, verifier), isFalse);
+
+      final wrongPrincipalServer = AuthGss(
+        principal: 'other@REALM',
+        service: 'nfs',
+        sessionKey: key,
+      );
+      expect(wrongPrincipalServer.validate(credential, verifier), isFalse);
     });
   });
 }

@@ -34,6 +34,24 @@ void main() {
       expect(records.single, orderedEquals([1, 2, 3, 4, 5, 6, 7]));
       expect(buffer.length, equals(0));
     });
+
+    test('rejects fragments larger than configured maximum', () {
+      final codec = RecordMarkingCodec(maxFragmentLength: 4);
+      final buffer = BytesBuilder();
+      final header = ByteData(RecordMarkingConstants.headerSize)
+        ..setUint32(
+          0,
+          RecordMarkingConstants.lastFragmentBit | 8,
+        );
+      buffer
+        ..add(header.buffer.asUint8List())
+        ..add(Uint8List.fromList(List<int>.filled(8, 1)));
+
+      expect(
+        () => codec.decode(buffer),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 
   group('TcpServerTransport', () {

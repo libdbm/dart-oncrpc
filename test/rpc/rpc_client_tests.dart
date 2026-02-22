@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dart_oncrpc/src/rpc/rpc_authentication.dart';
 import 'package:dart_oncrpc/src/rpc/rpc_client.dart';
 import 'package:dart_oncrpc/src/rpc/rpc_errors.dart';
 import 'package:dart_oncrpc/src/rpc/rpc_message.dart';
+import 'package:dart_oncrpc/src/rpc/rpc_transport.dart';
 import 'package:dart_oncrpc/src/rpc/testing/mock_transport.dart';
+import 'package:dart_oncrpc/src/xdr/xdr_io.dart';
 import 'package:test/test.dart';
 
 Uint8List _sessionKey() => Uint8List.fromList(List<int>.generate(16, (i) => i));
@@ -139,6 +142,88 @@ void main() {
       await expectLater(second, completion(isNull));
 
       await client.close();
+    });
+
+    test('maxRetries = 0 still performs one attempt', () async {
+      final transport = MockTransport();
+      final client = RpcClient(
+        transport: transport,
+        timeout: const Duration(milliseconds: 30),
+        maxRetries: 0,
+      );
+      await client.connect();
+
+      await expectLater(
+        client.call(program: 1, version: 1, procedure: 1),
+        throwsA(isA<RpcTimeoutError>()),
+      );
+      expect(transport.sentCount, equals(1));
+
+      await client.close();
+    });
+
+    test('rejects negative maxRetries', () {
+      expect(
+        () => RpcClient(transport: MockTransport(), maxRetries: -1),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('UDP client ignores replies from unexpected source endpoint',
+        () async {
+      final server =
+          await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final attacker =
+          await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+
+      final client = RpcClient(
+        transport: UdpTransport(host: '127.0.0.1', port: server.port),
+        timeout: const Duration(milliseconds: 60),
+        maxRetries: 0,
+      );
+      await client.connect();
+
+      final firstRequest = Completer<Datagram>();
+      final serverSub = server.listen((event) {
+        if (event != RawSocketEvent.read || firstRequest.isCompleted) {
+          return;
+        }
+        final datagram = server.receive();
+        if (datagram != null) {
+          firstRequest.complete(datagram);
+        }
+      });
+
+      try {
+        final callFuture = client.call(program: 1, version: 1, procedure: 1);
+        final request = await firstRequest.future.timeout(
+          const Duration(seconds: 1),
+        );
+        final xid = XdrInputStream(request.data).readInt();
+
+        final forgedReply = RpcMessage(
+          xid: xid,
+          messageType: MessageType.reply,
+          body: ReplyBody(
+            replyStatus: ReplyStatus.accepted,
+            data: AcceptedReply(
+              verf: OpaqueAuth.none(),
+              acceptStatus: AcceptStatus.success,
+              data: SuccessData(Uint8List(0)),
+            ),
+          ),
+        );
+        final stream = XdrOutputStream();
+        forgedReply.encode(stream);
+        attacker.send(stream.toBytes(), request.address, request.port);
+
+        await expectLater(callFuture, throwsA(isA<RpcTimeoutError>()));
+      } finally {
+        await serverSub.cancel();
+        await client.close();
+        attacker.close();
+        server.close();
+      }
     });
   });
 }

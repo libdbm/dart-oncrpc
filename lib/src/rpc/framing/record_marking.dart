@@ -20,8 +20,19 @@ class RecordMarkingConstants {
 /// - Each record has a 4-byte header followed by data
 /// - Header format: bit 31 = last fragment flag, bits 0-30 = fragment length
 class RecordMarkingCodec {
+  RecordMarkingCodec({
+    this.maxFragmentLength = _defaultMaxFragmentLength,
+    this.maxMessageLength = _defaultMaxMessageLength,
+  })  : assert(maxFragmentLength > 0),
+        assert(maxMessageLength >= maxFragmentLength);
+
+  static const int _defaultMaxFragmentLength = 16 * 1024 * 1024; // 16 MiB
+  static const int _defaultMaxMessageLength = 64 * 1024 * 1024; // 64 MiB
+
   // Track state between decode calls so multi-fragment messages are reconstructed.
   final BytesBuilder _currentMessage = BytesBuilder(copy: false);
+  final int maxFragmentLength;
+  final int maxMessageLength;
   int? _expectedFragmentLength;
   bool _pendingLastFragmentFlag = false;
 
@@ -66,10 +77,17 @@ class RecordMarkingCodec {
           RecordMarkingConstants.headerSize,
         );
         final headerValue = header.getUint32(0);
+        final fragmentLength = headerValue & RecordMarkingConstants.lengthMask;
         _pendingLastFragmentFlag =
             (headerValue & RecordMarkingConstants.lastFragmentBit) != 0;
-        _expectedFragmentLength =
-            headerValue & RecordMarkingConstants.lengthMask;
+        _expectedFragmentLength = fragmentLength;
+        if (fragmentLength > maxFragmentLength) {
+          _resetState(buffer);
+          throw FormatException(
+            'RPC fragment length $fragmentLength exceeds '
+            'configured maximum $maxFragmentLength bytes',
+          );
+        }
 
         // Remove header from buffer
         buffer.clear();
@@ -89,6 +107,13 @@ class RecordMarkingCodec {
 
       // Extract the record
       final recordData = currentBytes.sublist(0, _expectedFragmentLength!);
+      if (_currentMessage.length + recordData.length > maxMessageLength) {
+        _resetState(buffer);
+        throw FormatException(
+          'RPC message length exceeds configured maximum '
+          '$maxMessageLength bytes',
+        );
+      }
       _currentMessage.add(recordData);
 
       // Remove record from buffer
@@ -109,5 +134,12 @@ class RecordMarkingCodec {
     }
 
     return records;
+  }
+
+  void _resetState(final BytesBuilder buffer) {
+    _currentMessage.clear();
+    _expectedFragmentLength = null;
+    _pendingLastFragmentFlag = false;
+    buffer.clear();
   }
 }

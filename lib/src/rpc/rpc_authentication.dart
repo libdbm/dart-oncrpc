@@ -434,13 +434,13 @@ class AuthDes extends RpcAuthentication {
 
     try {
       final stream = XdrInputStream(credential.body);
-      final hostname = stream.readString();
+      final credentialHostname = stream.readString();
       final timestamp = stream.readInt();
       final window = stream.readInt();
       final mac = stream.readOpaque();
 
       final payload = XdrOutputStream()
-        ..writeString(hostname)
+        ..writeString(credentialHostname)
         ..writeInt(timestamp)
         ..writeInt(window);
       final expected = _hmacSha256(secretKey, payload.bytes);
@@ -468,7 +468,7 @@ class AuthDes extends RpcAuthentication {
       }
 
       _timestamp = timestamp;
-      return hostname == hostname;
+      return credentialHostname == hostname;
     } catch (_) {
       return false;
     }
@@ -611,22 +611,22 @@ class AuthGss extends RpcAuthentication {
       }
 
       final sequence = stream.readInt();
-      final service = stream.readString();
-      final principal = stream.readString();
+      final credentialService = stream.readString();
+      final credentialPrincipal = stream.readString();
       final mac = stream.readOpaque();
 
       final expected = _signCredential(
         version,
         sequence,
-        service,
-        principal,
+        credentialService,
+        credentialPrincipal,
       );
 
       if (!_constantTimeEquals(mac, expected)) {
         return false;
       }
 
-      if (service != service || principal != principal) {
+      if (credentialService != service || credentialPrincipal != principal) {
         return false;
       }
 
