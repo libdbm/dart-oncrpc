@@ -1,7 +1,7 @@
 name: dart_oncrpc
 description: >-
   A complete ONC-RPC (Open Network Computing Remote Procedure Call) implementation for Dart.
-version: 1.0.2
+version: 1.0.3
 homepage: https://github.com/libdbm/dart-oncrpc
 repository: https://github.com/libdbm/dart-oncrpc
 issue_tracker: https://github.com/libdbm/dart-oncrpc/issues
@@ -11,7 +11,7 @@ environment:
 
 
 dependencies:
-  analyzer: ^8.2.0
+  analyzer: ^10.2.0
   args: ^2.7.0
   build: ^4.0.1
   crypto: ^3.0.3
