@@ -30,3 +30,8 @@ Bug fixes in the RPC subsystem:
   - handle record-marking decode failures safely in TCP transports
   - fix server metrics interceptor procedure-key propagation
   - add regression tests for auth flavor handling, auth identity checks, retry semantics, UDP spoof filtering, garbage-args mapping, record-marking limits, and portmap CALLIT encoding
+
+## 1.0.3
+
+Cleaning up dependencies.
+
